@@ -1,0 +1,4 @@
+#!/bin/bash
+# bin/detect <build-dir>
+
+echo "libfaketime" && exit 0
