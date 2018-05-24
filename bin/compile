@@ -1,0 +1,44 @@
+#!/bin/bash
+# bin/compile <build-dir> <cache-dir>
+
+# fail fast
+set -e
+
+BUILD_DIR=$1
+CACHE_DIR=$2
+BUILDPACK_NAME=libfaketime
+DIST_DIR="${BUILD_DIR}/libfaketime-dist"
+OUTPUT_DIR="${CACHE_DIR}/vendor/libfaketime"
+VENDOR_DIR="${BUILD_DIR}/libfaketime-src"
+URL="https://github.com/creditspring/libfaketime/archive/disable_faketime_in_pthread_cond_timedwait_common.tar.gz"
+
+cd "${BUILD_DIR}"
+mkdir -p "${VENDOR_DIR}"
+
+echo "-----> Vendoring binaries"
+# Download vendor to uncompress it
+curl -L "${URL}" | tar xz -C "${VENDOR_DIR}"
+
+# Find newest directory inside the vendor directory and visit it
+lib=$(ls -t "${VENDOR_DIR}" | sort -n | head -1)
+echo "lib: ${lib}"
+
+# Some libs like libfaketime by default compiles into /usr/local/lib
+# which is not accessible on Heroku so we need to store it in different location.
+# In this case we store it in the application's directory.
+mkdir -p "${DIST_DIR}"
+(cd "${VENDOR_DIR}/${lib}" && PREFIX=$DIST_DIR make install)
+mkdir -p "${OUTPUT_DIR}"
+mv ${DIST_DIR}/lib/faketime/* ${OUTPUT_DIR}
+
+echo "-----> Cleaning vendor cache"
+rm -rf "${DIST_DIR}"
+rm -rf "${VENDOR_DIR}"
+
+echo "-----> Building runtime environment"
+mkdir -p "${BUILD_DIR}/.profile.d"
+
+cat <<EOF > "${BUILD_DIR}/.profile.d/$BUILDPACK_NAME.sh"
+export LD_PRELOAD=/app/vendor/libfaketime/libfaketime.so.1
+export FAKETIME_NO_CACHE=1
+EOF
